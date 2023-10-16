@@ -6,17 +6,19 @@ import (
 )
 
 /*
+#include <assert.h>
 #include <stdlib.h>
 
 void call_getenv() {
-
-	const char* wtf = getenv("doesnotexist");
-	*wtf;
+	const char* value = getenv("doesnotexist");
+	assert(value == NULL);
 }
 */
 import "C"
 
 func main() {
+	fmt.Println("setting new environment variables; will not crash on Mac OS X")
+
 	go func() {
 		for {
 			C.call_getenv()

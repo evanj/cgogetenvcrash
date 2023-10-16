@@ -1,6 +1,10 @@
 # Go netdns=cgo crash (SIGSEGV) in getaddrinfo
 
-A Go program that uses the cgo DNS resolver can cause a segmentation fault if it sets environment variables while looking up DNS names. The problem is that glibc's DNS resolver can be configured using a number of environment variables ([see `man resolv.conf`](https://man7.org/linux/man-pages/man5/resolv.conf.5.html)). However, glibc's implementation of getenv and setenv are not thread-safe. This is permitted by the POSIX standard, and clearly documented in [`man setenv`](https://man7.org/linux/man-pages/man3/setenv.3.html) and [`man attributes`](https://man7.org/linux/man-pages/man7/attributes.7.html). This program does *not* crash using musl libc, because its DNS resolver does not use environment variables. However, a program that calls into C code that calls `getenv` will also crash, either with musl or glibc.
+A Go program that uses the cgo DNS resolver can cause a segmentation fault if it sets environment variables while looking up DNS names. The problem is that glibc's DNS resolver can be configured using a number of environment variables ([see `man resolv.conf`](https://man7.org/linux/man-pages/man5/resolv.conf.5.html)). However, `setenv` is not thread-safe. This is permitted by the POSIX standard, and clearly documented in [`man setenv`](https://man7.org/linux/man-pages/man3/setenv.3.html) and [`man attributes`](https://man7.org/linux/man-pages/man7/attributes.7.html). The problem is that `getenv` returns a `char*`, so it can't be made thread-safe without making `setenv`, `putenv`, and `unsetenv` leak memory.
+
+This program does *not* crash using musl libc, because its DNS resolver does not use environment variables. However, a program that calls into C code that calls `getenv` will also crash, either with musl or glibc.
+
+Other C library implementations will crash when explicitly using environment variables via Cgo. See `setenvcrash` which crashes when using glibc and musl, but not on Darwin. On Darwin, `unsetenvcrash` will crash.
 
 
 ## Reproduction instructions:
@@ -12,7 +16,7 @@ Example command lines:
 
 ```
 # Outside docker container
-CGO_ENABLED=1 go build -o cgocrashbug .
+CGO_ENABLED=1 go build -o cgogetenvcrash .
 docker run --rm -ti --mount type=bind,source=$(pwd),destination=/cgogetenvcrash debian:latest
 
 # Inside the docker container
@@ -25,6 +29,12 @@ for i in $(seq 10000); do GOTRACEBACK=crash GODEBUG=netdns=2+cgo /cgogetenvcrash
 * `syscall.Setenv`: Copies the process's initial environment variables into its own copy, protected by a Mutex. The mutex is held while calling all the functions below, including C's setenv() function, so only one Go thread can modify environment variables at a time. https://github.com/golang/go/blob/dc12cb179a3fb97bf9a12155c742f1737e858f7c/src/syscall/env_unix.go#L91
 * `runtime.Setenv`: calls `setenv_c`, and if the key is GODEBUG, updates some internal state. https://github.com/golang/go/blob/dc12cb179a3fb97bf9a12155c742f1737e858f7c/src/runtime/runtime.go#L130
 * `setenv_c`: Calls C's setenv() function if Cgo is enabled. https://github.com/golang/go/blob/dc12cb179a3fb97bf9a12155c742f1737e858f7c/src/runtime/env_posix.go#L49
+
+## Notes about Mac OS X's setenv implementation
+
+Mac OS X's libc (from BSD, so probably true for FreeBSD, NetBSD, etc) uses a lock around its environment variable functions. This means that adding new environment variables does to crash, which is what `setenvcrash` does. However, using `unsetenv`, or overwriting an environment variable's value, will crash. This causes the previous value to be freed, which causes the crash.
+
+Implementation: https://github.com/apple-oss-distributions/Libc/blob/Libc-1583.0.14/stdlib/FreeBSD/setenv.c
 
 
 ## Raw crash output followed by gdb backtrace
