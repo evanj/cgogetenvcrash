@@ -4,7 +4,7 @@ A Go program that uses the cgo DNS resolver can cause a segmentation fault if it
 
 This program does *not* crash using musl libc, because its DNS resolver does not use environment variables. However, a program that calls into C code that calls `getenv` will also crash, either with musl or glibc.
 
-Other C library implementations will crash when explicitly using environment variables via Cgo. See `setenvcrash` which crashes when using glibc and musl, but not on Darwin. On Darwin, `unsetenvcrash` will crash.
+Other C library implementations will crash when explicitly using environment variables via Cgo. See `setenvcrash`, which creates many new environment variables and crashes when using glibc and musl, but not on Darwin. The `unsetenvcrash` program calls Setenv/Unsetenv in a loop, and crashes on Darwin but not on Linux.
 
 
 ## Reproduction instructions:
