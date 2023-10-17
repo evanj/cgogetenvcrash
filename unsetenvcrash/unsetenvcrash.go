@@ -24,7 +24,7 @@ const varName = "go_var"
 const varValue = "value"
 
 func main() {
-	fmt.Println("calling setenv/unsetenv: will crash all tested operating systems")
+	fmt.Println("calling setenv/unsetenv: crashes Mac OS X, not Linux glibc")
 
 	go func() {
 		for {
