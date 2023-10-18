@@ -39,8 +39,12 @@ func main() {
 
 	// setting many environment variables makes the bug much more likely
 	for i := 0; i < 100; i++ {
-		os.Setenv(fmt.Sprintf("ENV_VAR_%03d", i), "foo")
+		err := os.Setenv(fmt.Sprintf("ENV_VAR_%03d", i), "foo")
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	<-addrsDone
+	fmt.Println("exiting successfully")
 }
