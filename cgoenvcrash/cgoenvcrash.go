@@ -29,7 +29,7 @@ import "C"
 const varName = "go_var"
 const varValue = "value"
 
-func runTest(numIterations int, cFunc func(), goFunc func(iteration int)) {
+func runTest(cFunc func(), goFunc func(iteration int)) {
 	start := time.Now()
 	done := make(chan struct{})
 
@@ -45,6 +45,7 @@ func runTest(numIterations int, cFunc func(), goFunc func(iteration int)) {
 		}
 	}()
 
+	const numIterations = 1000
 	for i := 0; i < numIterations; i++ {
 		goFunc(i)
 	}
@@ -52,18 +53,16 @@ func runTest(numIterations int, cFunc func(), goFunc func(iteration int)) {
 }
 
 func main() {
-	const numIterations = 1000000
-
 	fmt.Println("## Setenv overwriting a single variable with unique strings")
-	fmt.Println("   does not crashes Mac OS X or Linux glibc")
-	runTest(numIterations, func() { C.call_getenv_any_value() }, func(iteration int) {
+	fmt.Println("   does not crash Mac OS X or Linux glibc")
+	runTest(func() { C.call_getenv_any_value() }, func(iteration int) {
 		os.Setenv(varName, fmt.Sprintf("i->%d", iteration))
 	})
 	os.Unsetenv(varName)
 
 	fmt.Println("## Setenv/Unsetenv of single variable")
 	fmt.Println("   crashes Mac OS X, not Linux glibc")
-	runTest(numIterations, func() { C.call_getenv_expected_value() }, func(iteration int) {
+	runTest(func() { C.call_getenv_expected_value() }, func(iteration int) {
 		os.Setenv(varName, varValue)
 		os.Unsetenv(varName)
 	})
@@ -71,7 +70,7 @@ func main() {
 
 	fmt.Println("## Setenv of many new variables")
 	fmt.Println("   crashes Linux glibc, not Mac OS X")
-	runTest(numIterations, func() { C.call_getenv_expected_value() }, func(iteration int) {
+	runTest(func() { C.call_getenv_expected_value() }, func(iteration int) {
 		os.Setenv(fmt.Sprintf("%s_%d", varName, iteration), varValue)
 	})
 }
