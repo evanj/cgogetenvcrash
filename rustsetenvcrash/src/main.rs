@@ -1,6 +1,8 @@
-use std::{error::Error, net::ToSocketAddrs};
+use std::net::ToSocketAddrs;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
+    const NUM_ITERATIONS: usize = 100;
+
     // terrible argument parsing without dependencies
     const TRY_GETENV: &str = "try_getenv";
     let program_args: Vec<String> = std::env::args().collect();
@@ -18,7 +20,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let try_getenv = program_args.len() == 2;
 
-    const NUM_ITERATIONS: usize = 100;
     println!("will call std::env::set_var() {NUM_ITERATIONS} times ...");
 
     let t = if try_getenv {
@@ -38,7 +39,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     t.join().expect("BUG thread must succeed");
 
     println!("exiting without error");
-    Ok(())
 }
 
 fn lookup_localhost() {
@@ -51,8 +51,6 @@ fn lookup_localhost() {
 fn do_getenv() {
     for _ in 0..1000 {
         let r = std::env::var("doesnotexist");
-        if let Ok(_) = r {
-            panic!("env var should not exist");
-        }
+        assert!(r.is_ok(), "env var should not exist");
     }
 }
