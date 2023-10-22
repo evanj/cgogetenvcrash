@@ -9,6 +9,11 @@ all: $(EXES)
 		--deny clippy::nursery \
 		--deny clippy::pedantic
 
+	# DeprecatedOrUnsafeBufferHandling: Warns about snprintf which has no alternative in glibc
+	clang-tidy \
+		--checks=all,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling \
+		cenvleak/cenvleak.c
+
 cenvleak/cenvleak: cenvleak/cenvleak.c
 
 clean:

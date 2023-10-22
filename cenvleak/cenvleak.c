@@ -1,20 +1,20 @@
-#include <stdio.h>
-#include <sys/resource.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <malloc.h>
 #include <limits.h>
+#include <malloc.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/resource.h>
+#include <unistd.h>
 
 static const char STATM_PATH[] = "/proc/self/statm";
 static const size_t MAX_STATM_SIZE = 4096;
 // see sysconf(_SC_PAGESIZE) but this is close enough
 static const size_t INCORRECT_PAGE_SIZE = 4096;
 
-// Returns the process's RSS in bytes by reading /proc/self/statm. Returns -1 on error.
-// This assumes 4 kiB page sizes, which is not strictly true.
+// Returns the process's RSS in bytes by reading /proc/self/statm. Returns -1 on error. This assumes
+// 4 kiB page sizes, which is not strictly true.
 int rss_bytes()
 {
     int fd = open(STATM_PATH, O_RDONLY);
@@ -55,12 +55,13 @@ int rss_bytes()
 
     return rss_pages * INCORRECT_PAGE_SIZE;
 }
+
 int main()
 {
     printf("demonstrates that setenv() never frees memory. Calling setenv/unsetenv ...\n");
 
-    // This is not necessarily true, but I don't have access to systems where it is not
-    assert(sysconf(_SC_PAGESIZE) == 4096);
+    // This is not strictly true, but I don't have access to systems where it is not
+    assert(sysconf(_SC_PAGESIZE) == INCORRECT_PAGE_SIZE);
 
     static const int NUM_TO_ALLOCATE = 10000;
 
@@ -69,11 +70,12 @@ int main()
 
     struct mallinfo2 before_mallinfo = mallinfo2();
 
-    char env_name_buf[4096];
+    // length must be at least 9 + length of NUM_TO_ALLOCATE; make it huge to be safe
+    char env_name_buf[256];
     for (int i = 0; i < NUM_TO_ALLOCATE; i++)
     {
         int bytes_written = snprintf(env_name_buf, sizeof(env_name_buf), "env_var_%d", i);
-        assert(bytes_written < (int)sizeof(env_name_buf));
+        assert(0 < bytes_written && bytes_written < (int)sizeof(env_name_buf));
         int result = setenv(env_name_buf, "env_value", 1);
         assert(result == 0);
         result = unsetenv(env_name_buf);
@@ -85,8 +87,8 @@ int main()
 
     struct mallinfo2 after_mallinfo = mallinfo2();
 
-    printf("RSS bytes before=%d after=%d diff=%d\n",
-           before_rss_bytes, after_rss_bytes, after_rss_bytes - before_rss_bytes);
+    printf("RSS bytes before=%d after=%d diff=%d\n", before_rss_bytes, after_rss_bytes,
+           after_rss_bytes - before_rss_bytes);
     printf("malloc info total allocated space bytes before=%zu after=%zu diff=%zu\n",
            before_mallinfo.uordblks, after_mallinfo.uordblks,
            after_mallinfo.uordblks - before_mallinfo.uordblks);
