@@ -56,9 +56,51 @@ int rss_bytes()
     return rss_pages * INCORRECT_PAGE_SIZE;
 }
 
+#ifdef __GLIBC__
+// glibc provides mallinfo2()
+struct malloc_stats
+{
+    struct mallinfo2 glibc_mallinfo2;
+};
+
+struct malloc_stats get_malloc_stats()
+{
+    struct malloc_stats result = {0};
+    result.glibc_mallinfo2 = mallinfo2();
+    return result;
+}
+
+void print_malloc_diff(struct malloc_stats before, struct malloc_stats after)
+{
+    printf("malloc info total allocated space bytes before=%zu after=%zu diff=%zu "
+           "(mallinfo2.uordblks)\n",
+           before.glibc_mallinfo2.uordblks, after.glibc_mallinfo2.uordblks,
+           after.glibc_mallinfo2.uordblks - before.glibc_mallinfo2.uordblks);
+}
+
+#else
+// musl does not provide malloc stats
+struct malloc_stats
+{
+};
+
+struct malloc_stats get_malloc_stats()
+{
+    struct malloc_stats result = {};
+    return result;
+}
+
+void print_malloc_diff(struct malloc_stats before __attribute__((unused)),
+                       struct malloc_stats after __attribute__((unused)))
+{
+    printf("malloc info not supported\n");
+}
+#endif
+
 int main()
 {
-    printf("demonstrates that setenv() never frees memory. Calling setenv/unsetenv ...\n");
+    printf("demonstrates that glibc setenv() never frees memory (musl does). Calling "
+           "setenv/unsetenv ...\n");
 
     // This is not strictly true, but I don't have access to systems where it is not
     assert(sysconf(_SC_PAGESIZE) == INCORRECT_PAGE_SIZE);
@@ -68,7 +110,7 @@ int main()
     int before_rss_bytes = rss_bytes();
     assert(before_rss_bytes >= 0);
 
-    struct mallinfo2 before_mallinfo = mallinfo2();
+    struct malloc_stats before_malloc_stats = get_malloc_stats();
 
     // length must be at least 9 + length of NUM_TO_ALLOCATE; make it huge to be safe
     char env_name_buf[256];
@@ -85,11 +127,9 @@ int main()
     int after_rss_bytes = rss_bytes();
     assert(after_rss_bytes >= 0);
 
-    struct mallinfo2 after_mallinfo = mallinfo2();
+    struct malloc_stats after_malloc_stats = get_malloc_stats();
 
     printf("RSS bytes before=%d after=%d diff=%d\n", before_rss_bytes, after_rss_bytes,
            after_rss_bytes - before_rss_bytes);
-    printf("malloc info total allocated space bytes before=%zu after=%zu diff=%zu\n",
-           before_mallinfo.uordblks, after_mallinfo.uordblks,
-           after_mallinfo.uordblks - before_mallinfo.uordblks);
+    print_malloc_diff(before_malloc_stats, after_malloc_stats);
 }
