@@ -9,18 +9,25 @@ Other C library implementations will crash when explicitly using environment var
 
 ## Reproduction instructions:
 
-1. Build the binary with `CGO_ENABLED=1`.
-2. Run the binary many times in a loop. I have to run it in a Docker container to make it crash for some reason.
+1. Build the binary: `CGO_ENABLED=1 go build -o cgogetenvcrash .`
+2. Run the binary many times in a loop: `for i in $(seq 10000); do GOTRACEBACK=crash GODEBUG=netdns=2+cgo ./cgogetenvcrash || break; done`
 
-Example command lines:
+## `cenvleak`
+
+This program calls setenv/unsetenv of a single variable then prints the RSS. This shows that with glibc, this leaks memory:
 
 ```
-# Outside docker container
-CGO_ENABLED=1 go build -o cgogetenvcrash .
-docker run --rm -ti --mount type=bind,source=$(pwd),destination=/cgogetenvcrash debian:latest
+demonstrates that glibc setenv() never frees memory (musl does). Calling setenv/unsetenv ...
+RSS bytes before=1572864 after=2228224 diff=655360
+malloc info total allocated space bytes before=1696 after=642064 diff=640368 (mallinfo2.uordblks)
+```
 
-# Inside the docker container
-for i in $(seq 10000); do GOTRACEBACK=crash GODEBUG=netdns=2+cgo /cgogetenvcrash/cgogetenvcrash || break; done
+With musl:
+
+```
+demonstrates that glibc setenv() never frees memory (musl does). Calling setenv/unsetenv ...
+RSS bytes before=524288 after=524288 diff=0
+malloc info not supported
 ```
 
 ## Notes about Go's setenv implementation
