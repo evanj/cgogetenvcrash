@@ -1,6 +1,6 @@
 CC=clang
 CFLAGS:=-Wall -Wextra -Werror
-EXES:=cenvleak/cenvleak
+EXES:=cenvleak/cenvleak environvar/environvar
 
 all: $(EXES)
 	cd rustsetenvcrash && cargo test
@@ -20,6 +20,8 @@ all: $(EXES)
 	goimports -w .
 
 cenvleak/cenvleak: cenvleak/cenvleak.c
+
+environvar/environvar: environvar/environvar.c
 
 clean:
 	$(RM) $(EXES)
