@@ -13,6 +13,11 @@ all: $(EXES)
 	clang-tidy \
 		--checks=all,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling \
 		cenvleak/cenvleak.c
+	
+	go test ./...
+	go vet ./...
+	staticcheck --checks=all ./...
+	goimports -w .
 
 cenvleak/cenvleak: cenvleak/cenvleak.c
 

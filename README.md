@@ -1,20 +1,20 @@
 # Go netdns=cgo crash (SIGSEGV) in getaddrinfo
 
-A Go program that uses the cgo DNS resolver can cause a segmentation fault if it sets environment variables while looking up DNS names. The problem is that glibc's DNS resolver can be configured using a number of environment variables ([see `man resolv.conf`](https://man7.org/linux/man-pages/man5/resolv.conf.5.html)). However, `setenv` is not thread-safe. This is permitted by the POSIX standard, and clearly documented in [`man setenv`](https://man7.org/linux/man-pages/man3/setenv.3.html) and [`man attributes`](https://man7.org/linux/man-pages/man7/attributes.7.html). The problem is that `getenv` returns a `char*`, so it can't be made thread-safe without making `setenv`, `putenv`, and `unsetenv` leak memory.
+A Go program that uses the cgo DNS resolver can cause a segmentation fault if it sets environment variables while looking up DNS names. The problem is that glibc's DNS resolver can be configured using environment variables ([see `man resolv.conf`](https://man7.org/linux/man-pages/man5/resolv.conf.5.html)), so it calls `getenv`. However, calling `getenv` on one thread while `setenv` is being called by another is not thread-safe. This is permitted by the POSIX standard, and clearly documented in [`man setenv`](https://man7.org/linux/man-pages/man3/setenv.3.html) and [`man attributes`](https://man7.org/linux/man-pages/man7/attributes.7.html). The problem is that `getenv` returns a `char*`, so it can't be made thread-safe without making `setenv`, `putenv`, and `unsetenv` leak memory.
 
-This program does *not* crash using musl libc, because its DNS resolver does not use environment variables. However, a program that calls into C code that calls `getenv` will also crash, either with musl or glibc.
+This specific program does *not* crash using musl libc, because its DNS resolver does not use environment variables. However, a Go program that calls C code that then calls `getenv` can also crash, with nearly any libc implementation except Windows and Solaris/Illumos. See the `cgoenvcrash` program for details. It tests many different scenarios to cause crashes.
 
-Other C library implementations will crash when explicitly using environment variables via Cgo. See `setenvcrash`, which creates many new environment variables and crashes when using glibc and musl, but not on Darwin. The `unsetenvcrash` program calls Setenv/Unsetenv in a loop, and crashes on Darwin but not on Linux.
-
+For more details, see the [Go issue](https://github.com/golang/go/issues/63567) and [my blog post](https://www.evanjones.ca/setenv-is-not-thread-safe.html).
 
 ## Reproduction instructions:
 
 1. Build the binary: `CGO_ENABLED=1 go build -o cgogetenvcrash .`
 2. Run the binary many times in a loop: `for i in $(seq 10000); do GOTRACEBACK=crash GODEBUG=netdns=2+cgo ./cgogetenvcrash || break; done`
 
+
 ## `cenvleak`
 
-This program calls setenv/unsetenv of a single variable then prints the RSS. This shows that with glibc, this leaks memory:
+This program calls setenv/unsetenv of a single variable then prints the RSS. This shows that glibc leaks memory when calling setenv.
 
 ```
 demonstrates that glibc setenv() never frees memory (musl does). Calling setenv/unsetenv ...
@@ -30,12 +30,14 @@ RSS bytes before=524288 after=524288 diff=0
 malloc info not supported
 ```
 
+
 ## Notes about Go's setenv implementation
 
 * `os.Setenv`: Calls `syscall.Setenv` https://github.com/golang/go/blob/dc12cb179a3fb97bf9a12155c742f1737e858f7c/src/os/env.go#L119
 * `syscall.Setenv`: Copies the process's initial environment variables into its own copy, protected by a Mutex. The mutex is held while calling all the functions below, including C's setenv() function, so only one Go thread can modify environment variables at a time. https://github.com/golang/go/blob/dc12cb179a3fb97bf9a12155c742f1737e858f7c/src/syscall/env_unix.go#L91
 * `runtime.Setenv`: calls `setenv_c`, and if the key is GODEBUG, updates some internal state. https://github.com/golang/go/blob/dc12cb179a3fb97bf9a12155c742f1737e858f7c/src/runtime/runtime.go#L130
 * `setenv_c`: Calls C's setenv() function if Cgo is enabled. https://github.com/golang/go/blob/dc12cb179a3fb97bf9a12155c742f1737e858f7c/src/runtime/env_posix.go#L49
+
 
 ## Notes about Mac OS X's setenv implementation
 
